@@ -10,12 +10,21 @@ import urllib.error
 import threading
 from PIL import Image
 
-# Read credentials from Environment variables or fallback to embedded tokens
+# Read credentials and optional proxy settings
 TG_TOKEN = os.environ.get("TG_TOKEN") or os.environ.get("BOT_TOKEN") or "8414879801:AAGfklQ9SvExA7MXF2CMWdJWeTjyZMYLXW0"
 NVIDIA_API_KEY = os.environ.get("NVIDIA_API_KEY") or os.environ.get("NVIDIA_KEY") or "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"
 
-NVIDIA_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
-VISION_MODEL = "meta/llama-3.2-11b-vision-instruct"
+# Allow custom proxy / base URL override (e.g. if host is in geo-blocked region)
+NVIDIA_URL = os.environ.get("NVIDIA_BASE_URL") or os.environ.get("OPENAI_BASE_URL") or "https://integrate.api.nvidia.com/v1/chat/completions"
+VISION_MODEL = os.environ.get("VISION_MODEL") or "meta/llama-3.2-11b-vision-instruct"
+
+# Setup global proxy if HTTPS_PROXY / HTTP_PROXY is specified
+proxy_url = os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY") or os.environ.get("ALL_PROXY")
+if proxy_url:
+    proxy_handler = urllib.request.ProxyHandler({'http': proxy_url, 'https': proxy_url})
+    opener = urllib.request.build_opener(proxy_handler)
+    urllib.request.install_opener(opener)
+    print(f"[*] Proxy enabled: {proxy_url}")
 
 user_sessions = {}
 session_lock = threading.Lock()
@@ -46,7 +55,8 @@ def call_nvidia_nim(messages, retries=2):
     }
     headers = {
         "Authorization": f"Bearer {NVIDIA_API_KEY}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
+        "User-Agent": "NVIDIA-NIM-Client/1.0"
     }
     data = json.dumps(payload).encode("utf-8")
     
@@ -60,6 +70,14 @@ def call_nvidia_nim(messages, retries=2):
         except urllib.error.HTTPError as e:
             err_msg = e.read().decode("utf-8")
             print(f"[NVIDIA HTTP ERROR] attempt {attempt}: {e.code} - {err_msg}", file=sys.stderr)
+            if e.code == 451:
+                return (
+                    "⚠️ Ошибка 451 (Geo-Block):
+"
+                    "Сервер хостинга находится в регионе, заблокированном NVIDIA API по геолокации.
+"
+                    "👉 Укажите рабочий прокси в переменных окружения хостинга: HTTPS_PROXY=http://user:pass@ip:port"
+                )
             if attempt == retries:
                 return f"⚠️ Ошибка сервера модели ({e.code}). Попробуйте через минуту."
             time.sleep(2)
