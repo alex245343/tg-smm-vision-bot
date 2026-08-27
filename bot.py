@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import os
 import sys
 import time
@@ -9,27 +10,13 @@ import urllib.error
 import threading
 from PIL import Image
 
-def load_env(env_path="/home/nimtey/bot_config.env"):
-    config = {}
-    with open(env_path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if line and "=" in line and not line.startswith("#"):
-                k, v = line.split("=", 1)
-                config[k.strip()] = v.strip()
-    return config
+# Read credentials from Environment variables or fallback to embedded tokens
+TG_TOKEN = os.environ.get("TG_TOKEN") or os.environ.get("BOT_TOKEN") or "8414879801:AAGfklQ9SvExA7MXF2CMWdJWeTjyZMYLXW0"
+NVIDIA_API_KEY = os.environ.get("NVIDIA_API_KEY") or os.environ.get("NVIDIA_KEY") or "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"
 
-ENV = load_env()
-TG_TOKEN = ENV["TG_TOKEN"]
-NVIDIA_API_KEY = ENV["NVIDIA_KEY"]
 NVIDIA_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
 VISION_MODEL = "meta/llama-3.2-11b-vision-instruct"
 
-# Global session memory:
-# user_id -> {
-#    "file_id": str,
-#    "current_post": str
-# }
 user_sessions = {}
 session_lock = threading.Lock()
 
@@ -37,7 +24,7 @@ SYSTEM_PROMPT_NEW = (
     "Ты — профессиональный креативный SMM-копирайтер для Telegram-каналов. "
     "Твоя задача — внимательно изучить изображение и составить живой, эстетичный авторский пост на русском языке.\n\n"
     "ПРАВИЛА:\n"
-    "1. НЕ пиши служебных меток 'Заголовок:', 'Описание:', 'Эмоция:', 'Призыв:', 'Хэштеги:'. Это запрещено!\n"
+    "1. НЕ пиши служебных меток Заголовок:, Описание:, Эмоция:, Призыв:, Хэштеги:. Это запрещено!\n"
     "2. Напиши единый цельный текст с абзацами и эмодзи.\n"
     "3. Опиши конкретные детали с фото: свет, тени, композицию, настроение.\n"
     "4. В конце добавь 3-5 хэштегов."
@@ -178,7 +165,7 @@ def handle_update(update):
         )
         return
 
-    # 2. User sent a NEW PHOTO -> Complete reset of previous dialog
+    # 2. User sent a NEW PHOTO
     if photos:
         send_chat_action(chat_id, "typing")
         photo_file_id = photos[-1]["file_id"]
@@ -229,7 +216,6 @@ def handle_update(update):
         send_chat_action(chat_id, "typing")
         current_post = session["current_post"]
         
-        # Explicit rewrite prompt forcing Llama to apply the user's edit
         edit_messages = [
             {"role": "system", "content": SYSTEM_PROMPT_EDIT},
             {
@@ -251,7 +237,7 @@ def handle_update(update):
         return
 
 def main():
-    print("Starting Fully Reactive Vision Bot...")
+    print("Starting Fully Reactive Vision Bot (NVIDIA NIM)...")
     offset = 0
     tg_api_call("getUpdates", {"offset": -1})
     while True:
